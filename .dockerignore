@@ -1,0 +1,34 @@
+# Dependency directories
+node_modules/
+
+# Build outputs and coverage
+dist/
+coverage/
+
+# Tests and linting configs
+*.test.js
+*.spec.js
+tests/
+eslint.config.js
+.eslintcache
+
+# Version control
+.git/
+.gitignore
+
+# Environment files
+.env
+.env.*
+
+# IDEs and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# CI/CD pipelines
+.github/
+
+# Docker configurations (already processed by daemon)
+Dockerfile
+.dockerignore

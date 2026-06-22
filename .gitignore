@@ -1,0 +1,7 @@
+node_modules/
+.npm
+coverage/
+.eslintcache
+.env
+.env.*
+.DS_Store
