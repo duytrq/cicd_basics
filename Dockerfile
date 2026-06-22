@@ -15,6 +15,14 @@ COPY app.js ./
 # Stage 2: Runtime
 FROM node:24-alpine AS runtime
 
+# Clean up global npm and yarn to remove their vulnerabilities
+RUN rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/bin/npm \
+           /usr/local/bin/npx \
+           /opt/yarn-v* \
+           /usr/local/bin/yarn \
+           /usr/local/bin/yarnpkg
+
 # Thiết lập các nhãn OCI (Open Container Initiative)
 LABEL org.opencontainers.image.title="Simple Node.js Server" \
       org.opencontainers.image.description="A simple lightweight HTTP server running on Node.js alpine" \
