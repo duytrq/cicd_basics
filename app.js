@@ -13,7 +13,7 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/goat', (req, res) => {
-  res.send('C. Ronaldo');
+  res.send(GOAT);
 });
 
 const start = async () => {
