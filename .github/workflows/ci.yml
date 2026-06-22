@@ -40,7 +40,27 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      # Step 1: Build the image LOCALLY (do not push yet)
+      - name: Build local image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true # This saves the image to the local docker daemon
+          tags: ghcr.io/${{ github.repository_owner }}/demo-app:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image scan
+        use: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/demo-app:test
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Push image to GHCR
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
@@ -48,4 +68,3 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/demo-app:sha-${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/demo-app:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
