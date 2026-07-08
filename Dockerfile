@@ -9,8 +9,9 @@ COPY package*.json ./
 # Cài đặt chỉ các production dependencies để tối ưu kích thước image
 RUN npm ci --omit=dev
 
-# Sao chép file mã nguồn chính
-COPY app.js ./
+# Sao chép mã nguồn ứng dụng và static UI
+COPY app.js db.js ./
+COPY dist ./dist
 
 # Stage 2: Runtime
 FROM node:24-alpine AS runtime
