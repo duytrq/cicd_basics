@@ -1,0 +1,12 @@
+aws_region   = "ap-southeast-1"
+aws_profile  = "default"
+cluster_name = "cicd-demo"
+
+public_access_cidrs = ["REPLACE_WITH_YOUR_IP/32"]
+
+cluster_version     = "1.36"
+node_capacity_type  = "SPOT"
+node_instance_types = ["t3.small", "t3a.small"]
+node_min_size       = 0
+node_desired_size   = 1
+node_max_size       = 1
