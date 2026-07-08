@@ -2,8 +2,32 @@ name: ci
 on:
   push:
     branches: [main]
+    paths:
+      - app.js
+      - db.js
+      - app.test.js
+      - dist/**
+      - Dockerfile
+      - .dockerignore
+      - package.json
+      - package-lock.json
+      - eslint.config.js
+      - .github/workflows/ci.yml
+      - .github/workflows/reusable-build.yml
   pull_request:
     branches: [main]
+    paths:
+      - app.js
+      - db.js
+      - app.test.js
+      - dist/**
+      - Dockerfile
+      - .dockerignore
+      - package.json
+      - package-lock.json
+      - eslint.config.js
+      - .github/workflows/ci.yml
+      - .github/workflows/reusable-build.yml
 
 permissions:
   contents: read
