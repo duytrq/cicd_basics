@@ -38,11 +38,16 @@ jobs:
           digest="$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
-  deploy:
-    needs: build-unsigned
-    uses: ./.github/workflows/deploy.yml
-    with:
-      environment_name: staging
-      image_ref: ${{ needs.build-unsigned.outputs.image_ref }}
-      image_digest: ${{ needs.build-unsigned.outputs.image_digest }}
-      version: unsigned
+      - name: Verify unsigned image is rejected
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/demo-app@${{ steps.build.outputs.digest }}
+          EXPECTED_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+        run: |
+          if cosign verify "$IMAGE" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            --certificate-identity="$EXPECTED_IDENTITY"; then
+            echo "ERROR: unsigned image was accepted"
+            exit 1
+          fi
+
+          echo "OK: unsigned image was rejected by Cosign verify"
