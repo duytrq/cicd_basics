@@ -3,6 +3,8 @@ name: ci
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - .github/workflows/test_deploy_unsigned.yml
   pull_request:
     branches: [main]
     paths:
