@@ -5,42 +5,103 @@ on:
     tags:
       - 'v*.*.*'
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   promote-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    outputs:
+      image_ref: ${{ steps.image.outputs.ref }}
+      image_digest: ${{ steps.promote.outputs.digest }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Promote Docker Image (Re-tag via buildx)
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Define image reference
+        id: image
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/demo-app
+        run: echo "ref=${IMAGE_REF,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify source image before promotion
+        id: source
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          SOURCE_TAG: sha-${{ github.sha }}
+          EXPECTED_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+        run: |
+          source_digest="$(docker buildx imagetools inspect "$IMAGE_REF:$SOURCE_TAG" --format '{{.Manifest.Digest}}')"
+          if [[ ! "$source_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid source digest: $source_digest" >&2
+            exit 1
+          fi
+
+          cosign verify "$IMAGE_REF@$source_digest" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            --certificate-identity="$EXPECTED_IDENTITY"
+
+          echo "digest=$source_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Promote verified image
+        id: promote
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          SOURCE_DIGEST: ${{ steps.source.outputs.digest }}
+          VERSION: ${{ github.ref_name }}
         run: |
           docker buildx imagetools create \
-            --tag ghcr.io/${{ github.repository_owner }}/demo-app:${{ github.ref_name }} \
-            ghcr.io/${{ github.repository_owner }}/demo-app:sha-${{ github.sha }}
+            --tag "$IMAGE_REF:$VERSION" \
+            "$IMAGE_REF@$SOURCE_DIGEST"
+
+          promoted_digest="$(docker buildx imagetools inspect "$IMAGE_REF:$VERSION" --format '{{.Manifest.Digest}}')"
+          if [[ "$promoted_digest" != "$SOURCE_DIGEST" ]]; then
+            echo "Promotion changed digest: $SOURCE_DIGEST -> $promoted_digest" >&2
+            exit 1
+          fi
+          echo "digest=$promoted_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Verify promoted image
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}@${{ steps.promote.outputs.digest }}
+          EXPECTED_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            --certificate-identity="$EXPECTED_IDENTITY"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836 # v2.3.3
         with:
           name: Release ${{ github.ref_name }}
-          tag_name: ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-production:
+    needs: promote-and-release
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment_name: production
+      image_ref: ${{ needs.promote-and-release.outputs.image_ref }}
+      image_digest: ${{ needs.promote-and-release.outputs.image_digest }}
+      version: ${{ github.ref_name }}

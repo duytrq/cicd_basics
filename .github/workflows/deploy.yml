@@ -1,34 +1,165 @@
 name: deploy
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*.*.*'
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_call:
+    inputs:
+      environment_name:
+        description: GitHub environment and deployment target
+        required: true
+        type: string
+      image_ref:
+        description: Image repository without tag or digest
+        required: true
+        type: string
+      image_digest:
+        description: Immutable sha256 image digest
+        required: true
+        type: string
+      version:
+        description: Human-readable version for deployment logs
+        required: true
+        type: string
 
 jobs:
   deploy-staging:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      ${{
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      }}
     runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: read
     steps:
-      - name: Deploy to Staging
-        run: |
-          echo "Deploying to Staging environment..."
-          echo "Simulating SSH to Staging VM..."
-          # Mock SSH deploy
-          echo "SSH command: ssh user@staging-vm 'docker pull ghcr.io/${{ github.repository }}/demo-app:latest && docker compose up -d'"
-          echo "Deployment to Staging completed successfully!"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
-  deploy-production:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Deploy to Production
+      - name: Log in to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Resolve CI image digest
+        id: image
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/demo-app
+          SOURCE_TAG: sha-${{ github.event.workflow_run.head_sha }}
         run: |
-          echo "Deploying version ${{ github.ref_name }} to Production environment..."
-          echo "Simulating SSH to Production VM..."
-          # Mock SSH deploy
-          echo "SSH command: ssh user@production-vm 'docker pull ghcr.io/${{ github.repository }}/demo-app:${{ github.ref_name }} && docker compose up -d'"
-          echo "Deployment to Production completed successfully!"
+          image_ref="${IMAGE_REF,,}"
+          image_digest="$(docker buildx imagetools inspect "$image_ref:$SOURCE_TAG" --format '{{.Manifest.Digest}}')"
+
+          if [[ ! "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid image digest: $image_digest" >&2
+            exit 1
+          fi
+
+          echo "ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Verify image signature
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}@${{ steps.image.outputs.digest }}
+          EXPECTED_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            --certificate-identity="$EXPECTED_IDENTITY"
+
+      - name: Deploy verified image
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}@${{ steps.image.outputs.digest }}
+          VERSION: sha-${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "Deploying $VERSION to staging"
+          echo "Verified image: $IMAGE"
+          echo "Simulated SSH: docker pull '$IMAGE' && docker compose up -d"
+          echo "Deployment completed successfully"
+
+      - name: Add deployment summary
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}@${{ steps.image.outputs.digest }}
+        run: |
+          {
+            echo "## Verified deployment"
+            echo "- Environment: \`staging\`"
+            echo "- Image: \`$IMAGE\`"
+            echo "- Signature issuer: \`https://token.actions.githubusercontent.com\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify-and-deploy:
+    if: github.event_name == 'workflow_call'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment_name }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Validate deployment input
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+          ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+        run: |
+          if [[ ! "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid image digest: $IMAGE_DIGEST" >&2
+            exit 1
+          fi
+
+          case "$ENVIRONMENT_NAME" in
+            staging|production) ;;
+            *) echo "Unsupported environment: $ENVIRONMENT_NAME" >&2; exit 1 ;;
+          esac
+
+      - name: Log in to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Verify image signature
+        env:
+          IMAGE: ${{ inputs.image_ref }}@${{ inputs.image_digest }}
+          EXPECTED_IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            --certificate-identity="$EXPECTED_IDENTITY"
+
+      - name: Deploy verified image
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+          IMAGE: ${{ inputs.image_ref }}@${{ inputs.image_digest }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "Deploying $VERSION to $ENVIRONMENT_NAME"
+          echo "Verified image: $IMAGE"
+          echo "Simulated SSH: docker pull '$IMAGE' && docker compose up -d"
+          echo "Deployment completed successfully"
+
+      - name: Add deployment summary
+        env:
+          ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+          IMAGE: ${{ inputs.image_ref }}@${{ inputs.image_digest }}
+        run: |
+          {
+            echo "## Verified deployment"
+            echo "- Environment: \`$ENVIRONMENT_NAME\`"
+            echo "- Image: \`$IMAGE\`"
+            echo "- Signature issuer: \`https://token.actions.githubusercontent.com\`"
+          } >> "$GITHUB_STEP_SUMMARY"
