@@ -114,3 +114,41 @@ jobs:
 
           latest_digest="$(docker buildx imagetools inspect "$IMAGE_REF:latest" --format '{{.Manifest.Digest}}')"
           test "$latest_digest" = "$IMAGE_DIGEST"
+  update-manifest:
+    needs: [build-and-push, sign-image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Manifest Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/app_of_apps
+          token: ${{ secrets.MANIFEST_REPO_TOKEN }}
+          path: manifest-repo
+
+      - name: Install yq
+        uses: mikefarah/yq@v4.44.1
+
+      - name: Update Digest in Manifest Overlay
+        env:
+          IMAGE_DIGEST: ${{ needs.build-and-push.outputs.image_digest }}
+        run: |
+          cd manifest-repo
+          yq eval -i ".image.digest = \"$IMAGE_DIGEST\"" charts/demo-app/values-demo.yaml
+
+          if git diff --quiet; then
+            echo "Digest hasn't changed. Skipping commit."
+            exit 0
+          fi
+
+      - name: Commit and Push Digest to Manifest Repo
+        env:
+          IMAGE_DIGEST: ${{ needs.build-and-push.outputs.image_digest }}
+        run: |
+          cd manifest-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add charts/demo-app/values-demo.yaml
+          git commit -m "chore(deploy): pin demo-app digest to $IMAGE_DIGEST"
+          git push origin main
