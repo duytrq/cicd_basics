@@ -69,17 +69,28 @@ jobs:
           echo "short_digest=${digest_hex:0:12}" >> "$GITHUB_OUTPUT"
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        id: trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
-          format: table
+          format: template
+          template: '@/contrib/html.tpl'
+          output: trivy-report.html
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: os,library
           severity: HIGH,CRITICAL
           scanners: vuln
           timeout: 10m0s
+
+      - name: Upload Trivy HTML report
+        if: always() && steps.trivy.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trivy-report-${{ steps.digest.outputs.short_digest }}
+          path: trivy-report.html
+          retention-days: 30
 
       - name: Generate SPDX JSON SBOM with Syft
         uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b # v0.20.6
@@ -104,10 +115,12 @@ jobs:
           IMAGE_REF: ${{ steps.image.outputs.ref }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
           SBOM_NAME: demo-app-sbom-${{ steps.digest.outputs.short_digest }}.spdx.json
+          TRIVY_REPORT: trivy-report-${{ steps.digest.outputs.short_digest }}
         run: |
           {
             echo "## Supply-chain build"
             echo "- Image: \`$IMAGE_REF@$IMAGE_DIGEST\`"
             echo "- SBOM artifact: \`$SBOM_NAME\`"
+            echo "- Trivy HTML report: \`$TRIVY_REPORT\`"
             echo "- Trivy policy: reject fixable HIGH/CRITICAL vulnerabilities"
           } >> "$GITHUB_STEP_SUMMARY"
