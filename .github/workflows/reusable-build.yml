@@ -75,7 +75,7 @@ jobs:
           scan-type: image
           image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
           format: template
-          template: '@/contrib/html.tpl'
+          template: '@$HOME/.local/bin/trivy-bin/contrib/html.tpl'
           output: trivy-report.html
           exit-code: '1'
           ignore-unfixed: true
