@@ -60,7 +60,7 @@ jobs:
 
       - name: Upload coverage report
         if: matrix.node == 22 && matrix.os == 'ubuntu-24.04'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: coverage-report
           path: coverage/lcov.info
@@ -106,7 +106,7 @@ jobs:
 
       - name: Download Trivy HTML template
         run: |
-          curl -sL -o trivy-html.tpl \
+          curl -sL --proto '=https' --tlsv1.2 -o trivy-html.tpl \
             https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
 
       - name: Scan for secrets with Trivy
@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload secret scan report
         if: always() && steps.secret-scan.outcome != 'skipped'
-        uses: actions/upload-artifact@ea165f8d65b6db9b8a4d0d969e902c97e56c3075 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: trivy-secrets-report
           path: trivy-secrets-report.html
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload IaC scan report
         if: always() && steps.iac-scan.outcome != 'skipped'
-        uses: actions/upload-artifact@ea165f8d65b6db9b8a4d0d969e902c97e56c3075 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: trivy-iac-report
           path: trivy-iac-report.html
