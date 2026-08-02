@@ -68,6 +68,11 @@ jobs:
           digest_hex="${IMAGE_DIGEST#sha256:}"
           echo "short_digest=${digest_hex:0:12}" >> "$GITHUB_OUTPUT"
 
+      - name: Download Trivy HTML template
+        run: |
+          curl -sL -o trivy-html.tpl \
+            https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
+
       - name: Scan image with Trivy
         id: trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -75,7 +80,7 @@ jobs:
           scan-type: image
           image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
           format: template
-          template: '@$HOME/.local/bin/trivy-bin/contrib/html.tpl'
+          template: '@trivy-html.tpl'
           output: trivy-report.html
           exit-code: '1'
           ignore-unfixed: true

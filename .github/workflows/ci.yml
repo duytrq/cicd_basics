@@ -94,7 +94,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  secret-scan:
+  security-scan:
     needs: [test]
     runs-on: ubuntu-latest
     permissions:
@@ -104,6 +104,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Download Trivy HTML template
+        run: |
+          curl -sL -o trivy-html.tpl \
+            https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
+
       - name: Scan for secrets with Trivy
         id: secret-scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -111,7 +116,7 @@ jobs:
           scan-type: fs
           scan-ref: .
           format: template
-          template: '@$HOME/.local/bin/trivy-bin/contrib/html.tpl'
+          template: '@trivy-html.tpl'
           output: trivy-secrets-report.html
           exit-code: '1'
           scanners: secret
@@ -119,19 +124,11 @@ jobs:
 
       - name: Upload secret scan report
         if: always() && steps.secret-scan.outcome != 'skipped'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6db9b8a4d0d969e902c97e56c3075 # v4.6.2
         with:
           name: trivy-secrets-report
           path: trivy-secrets-report.html
           retention-days: 30
-
-  iac-scan:
-    needs: [test]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Scan IaC with Trivy
         id: iac-scan
@@ -140,7 +137,7 @@ jobs:
           scan-type: config
           scan-ref: .
           format: template
-          template: '@$HOME/.local/bin/trivy-bin/contrib/html.tpl'
+          template: '@trivy-html.tpl'
           output: trivy-iac-report.html
           exit-code: '1'
           severity: HIGH,CRITICAL
@@ -155,7 +152,7 @@ jobs:
           retention-days: 30
 
   build-and-push:
-    needs: [lint, test, sonar, secret-scan, iac-scan]
+    needs: [lint, test, sonar, security-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
