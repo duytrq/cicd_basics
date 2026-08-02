@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "test": "jest",
+    "test:coverage": "jest --coverage --coverageReporters=lcov --coverageReporters=text",
     "lint": "eslint ."
   },
   "repository": {
