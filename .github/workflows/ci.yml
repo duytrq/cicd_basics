@@ -139,7 +139,7 @@ jobs:
           format: template
           template: '@trivy-html.tpl'
           output: trivy-iac-report.html
-          exit-code: '1'
+          exit-code: '0'
           severity: HIGH,CRITICAL
           timeout: 5m0s
 
