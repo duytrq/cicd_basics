@@ -238,7 +238,7 @@ jobs:
           jwtGithubAudience: sigstore
           caCertificate: ${{ secrets.VAULT_CA_CERT }}
           secrets: |
-            kvv2/jits/demo-app/ci/manifest-repo token | MANIFEST_REPO_TOKEN
+            kvv2/data/jits/demo-app/ci/manifest-repo token | MANIFEST_REPO_TOKEN
 
       - name: Checkout Manifest Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
