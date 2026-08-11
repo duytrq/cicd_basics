@@ -4,7 +4,7 @@ const database = require('./db');
 // get the port from env variable
 const PORT = process.env.PORT || 5001;
 
-const GOAT = 'L. Messi';
+const GOAT = 'Ankara Ankara Messi';
 
 const createApp = (taskStore = database) => {
   const app = express();
@@ -29,10 +29,13 @@ const createApp = (taskStore = database) => {
   });
 
   app.post('/tasks', async (req, res, next) => {
-    const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
+    const title =
+      typeof req.body.title === 'string' ? req.body.title.trim() : '';
 
     if (!title || title.length > 200) {
-      return res.status(400).json({ error: 'title must contain 1 to 200 characters' });
+      return res
+        .status(400)
+        .json({ error: 'title must contain 1 to 200 characters' });
     }
 
     try {
