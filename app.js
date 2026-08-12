@@ -4,7 +4,7 @@ const database = require('./db');
 // get the port from env variable
 const PORT = process.env.PORT || 5001;
 
-const GOAT = 'Cristiano Ronaldo';
+const GOAT = 'Lionel Messi';
 
 const createApp = (taskStore = database) => {
   const app = express();
